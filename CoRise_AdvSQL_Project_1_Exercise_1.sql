@@ -77,7 +77,7 @@ WITH customers AS(
         ec.email,
         s.supplier_id,
         s.supplier_name,
-        st_distance(ec.geo_location, s.geo_location)/1069 AS distance_from_supplier_to_customer_in_miles
+        st_distance(ec.geo_location, s.geo_location)/1609 AS distance_from_supplier_to_customer_in_miles
         
     FROM eligible_customers AS ec
     CROSS JOIN suppliers AS s
