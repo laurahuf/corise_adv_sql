@@ -1,5 +1,8 @@
 -- EXERCISE 1
 
+--APPROACH
+    /*Break out each segment via CTE, clean data, dedupe, add geo_location for customers and suppliers to calculcate distance, then partition over customer by distance and select smallest distance*/
+
 
 WITH customers AS(
     
