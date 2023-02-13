@@ -1,0 +1,135 @@
+ /* 
+     Parsley fiasco! Grocery stores in the greater Chicago area 
+     to send an overnight shipment of fresh parsley to our customers. 
+     We have one store in Chicago, IL and one store in Gary, IN both 
+     ready to help out with this request.
+ 
+ */
+
+/* Get customer name */
+
+with 
+    customers
+        as (
+            select
+                customer_id,
+                first_name || ' ' || last_name as customer_full_name 
+            from vk_data.customers.customer_data  
+                
+        )
+
+           -- select * from customers limit 100 /*QA CTE*/
+
+/* Find food pref count for active customers */
+
+    , active_customers_food_pref_count
+        as (
+            select
+                customer_id,
+                count(*) as food_pref_count
+            from vk_data.customers.customer_survey
+            where
+                is_active = true
+            group by 1
+                
+        )
+
+            -- select * from active_customers_food_pref_count limit 100 /*QA CTE*/
+
+/* Need geo coordinates for Chicago,IL store */
+
+    , geo_chicago_illinois
+        as (
+            select
+                geo_location
+            from vk_data.resources.us_cities
+            where
+                trim(city_name) ilike 'chicago' and trim(state_abbr) ilike 'il'      
+        
+        )
+
+            -- select * from geo_chicago_illinois limit  /*QA CTE*/
+
+/* Need geo coordinates for Gary, IN store */
+
+    , geo_gary_indiana
+        as (
+            select
+                geo_location
+            from vk_data.resources.us_cities
+            where
+                trim(city_name) ilike 'gary' and trim(state_abbr) ilike 'in'       
+        
+        )
+            -- select * from geo_gary_indiana limit  /*QA CTE*/
+
+/* 
+   Our customers are located in the following states/cities: 
+       CA: Oakland, Pleasant Hill
+       KY: Concord, Ashland, Georgetown
+       TX: Arlington, Brownsville
+   
+   We need to get the distance between those cities and the two stores that 
+   are helping us 
+*/
+
+    , customers_missing_parsley_distance_from_stores_helping
+        as (
+            select
+                ca.customer_id,
+                ca.customer_city,
+                ca.customer_state as customer_state_abbr,
+                (st_distance(us.geo_location, chicago.geo_location) / 1609)::int as chicago_distance_miles,
+                (st_distance(us.geo_location, gary.geo_location) / 1609)::int as gary_distance_miles
+            from vk_data.customers.customer_address as ca
+            inner join vk_data.resources.us_cities as us 
+                on upper(trim(ca.customer_city)) = upper(trim(us.city_name)) 
+                and upper(trim(ca.customer_state)) = upper(trim(us.state_abbr)) 
+            cross join geo_chicago_illinois as chicago
+            cross join geo_gary_indiana as gary
+            where 
+                (upper(trim(customer_state)) = 'CA' 
+                    and (
+                        trim(customer_city) ilike 'oakland' /* % doesn't seem neccessary since entire city name is being used */
+                        or trim(customer_city) ilike 'pleasant hill' 
+                        )
+                    )
+                or 
+                    (upper(trim(customer_state)) = 'KY' 
+                        and (
+                            trim(customer_city) ilike 'concord' 
+                            or trim(customer_city) ilike 'georgetown' 
+                            or trim(customer_city) ilike 'ashland'
+                            )
+                        )
+                or 
+                    (upper(trim(customer_state)) = 'TX' 
+                        and (
+                            trim(customer_city) ilike 'brownsville' 
+                            or trim(customer_city) ilike 'arlington' 
+                            )
+                        ) 
+        
+        )
+
+        -- select * from customers_missing_parsley_distance_from_stores_helping limit 100 /*QA CTE*/
+
+    , final
+        as (
+            select
+                c.customer_full_name, 
+                cmp.customer_city,
+                cmp.customer_state_abbr,
+                fp.food_pref_count,
+                chicago_distance_miles,
+                gary_distance_miles
+            from customers c
+            inner join customers_missing_parsley_distance_from_stores_helping as cmp
+                on c.customer_id = cmp.customer_id
+            inner join active_customers_food_pref_count as fp
+                on c.customer_id = fp.customer_id
+        
+        )
+
+
+select * from final
